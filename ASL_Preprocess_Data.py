@@ -68,7 +68,7 @@ def LSTM():
     log_dir = os.path.join('Logs')
     tb_callback = TensorBoard(log_dir=log_dir)
 
-    #Deep learning
+    
     model = Sequential()
     model.add(LSTM(64, return_sequences=True, activation='relu', input_shape=(30,258)))
     model.add(LSTM(128, return_sequences=True, activation='relu'))

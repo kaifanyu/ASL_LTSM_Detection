@@ -10,7 +10,7 @@ IMAGE_PATH = os.path.join('IMG_DATA')
 
 words = []
 
-with open('Sample.txt', 'r') as file:
+with open('Words.txt', 'r') as file:
     # Read each line and store it in the list
     for line in file:
         words.append(line.strip())  # Remove leading and trailing whitespaces if needed
@@ -19,13 +19,12 @@ actions = np.array(words)   #words list
 sequence_count = 30     #50 trials
 sequence_length = 30    #30 frames / trial 
 
-
 mp_pose = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils #drawing helpers
 mp_holistic = mp.solutions.holistic     #holistic model
 
 def folder_init():
-#Create 30 folders per action
+    #Create 30 folders per action
     for action in actions: 
         for sequence in range(sequence_count):
             try: 
@@ -42,6 +41,7 @@ def folder_restart():
         print(f"Folder '{DATA_PATH}, {IMAGE_PATH}' and its subfolders deleted successfully.")
     except FileNotFoundError:
         pass
+
     folder_init()
 
 #recolors image and make detections
@@ -66,6 +66,7 @@ def extract_keypoints(results): #convert landmakrs to nparray
     rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(21*3)
     return np.concatenate([pose, lh, rh])
 
+
 folder_restart()
 
 
@@ -73,52 +74,45 @@ folder_restart()
 cap = cv2.VideoCapture(0)
 frame_rate = cap.get(cv2.CAP_PROP_FPS)
 
+directory = actions[0]
 
-#Initiate holistic model
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
     
-    # NEW LOOP
-    # Loop through actions
-    for action in actions:
-        # Loop through sequences aka videos
-        for sequence in range(sequence_count):
-            # Loop through video length aka sequence length
-            for frame_num in range(sequence_length):
+    # Loop through sequences aka videos
+    for sequence in range(30):
+        # Loop through video length aka sequence length
+        for frame_num in range(sequence_length):
+            # Read feed
+            ret, frame = cap.read()
 
-                # Read feed
-                ret, frame = cap.read()
+            # Make detections
+            image, results = recolor(frame, holistic)
 
-                # Make detections
-                image, results = recolor(frame, holistic)
+            img_path = os.path.join(IMAGE_PATH, directory, str(sequence), f"frame{frame_num}.jpg")
+            cv2.imwrite(img_path, image)
 
-                # img_path = os.path.join(IMAGE_PATH, action, str(sequence), f"frame{frame_num}.jpg")
-                # cv2.imwrite(img_path, image)
-
-                # Draw landmarks
-                draw_landmarks(image, results)
-                
-                # NEW Apply wait logic
-                if frame_num == 0: 
-                    cv2.putText(image, 'STARTING COLLECTION', (120,200), 
+            # Draw landmarks
+            draw_landmarks(image, results)
+            
+            # NEW Apply wait logic
+            if frame_num == 0: 
+                cv2.putText(image, 'STARTING COLLECTION', (120,200), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255, 0), 4, cv2.LINE_AA)
-                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15,12), 
+                cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(directory, sequence), (15,12), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                    # Show to screen
-                    cv2.imshow('OpenCV Feed', image)
-                    cv2.waitKey(2000)
-                else: 
-                    cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(action, sequence), (15,12), 
+                # Show to screen
+                cv2.imshow('OpenCV Feed', image)
+                cv2.waitKey(500)
+            else: 
+                cv2.putText(image, 'Collecting frames for {} Video Number {}'.format(directory, sequence), (15,12), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                    # Show to screen
-                    cv2.imshow('OpenCV Feed', image)
-                
-                # NEW Export keypoints
-                keypoints = extract_keypoints(results)
-                npy_path = os.path.join(DATA_PATH, action, str(sequence), str(frame_num))
-                np.save(npy_path, keypoints)
+                # Show to screen
+                cv2.imshow('OpenCV Feed', image)
+            cv2.waitKey(20)
+            # NEW Export keypoints
+            keypoints = extract_keypoints(results)
+            npy_path = os.path.join(DATA_PATH, directory, str(sequence), str(frame_num))
+            np.save(npy_path, keypoints)
 
-                    
-    cap.release()
-    cv2.destroyAllWindows()
-
-
+cap.release()
+cv2.destroyAllWindows()
