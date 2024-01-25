@@ -1,17 +1,48 @@
+import shutil
 import cv2
+import os
 import mediapipe as mp
 import numpy as np
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-import pandas as pd
-from ASL_Folder_Init import *
+
+# Path for exported data, numpy arrays
+DATA_PATH = os.path.join('MP_Data') 
+IMAGE_PATH = os.path.join('IMG_DATA')
+
+words = []
+
+with open('Sample.txt', 'r') as file:
+    # Read each line and store it in the list
+    for line in file:
+        words.append(line.strip())  # Remove leading and trailing whitespaces if needed
+
+actions = np.array(words)   #words list
+sequence_count = 30     #50 trials
+sequence_length = 30    #30 frames / trial 
 
 
 mp_pose = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils #drawing helpers
 mp_holistic = mp.solutions.holistic     #holistic model
 
-# folder_init() #initalize folder for datapoint storage
+def folder_init():
+#Create 30 folders per action
+    for action in actions: 
+        for sequence in range(sequence_count):
+            try: 
+                os.makedirs(os.path.join(DATA_PATH, action, str(sequence)))
+                os.makedirs(os.path.join(IMAGE_PATH, action, str(sequence)))
+            except:
+                pass
+
+def folder_restart():
+    try:
+        # Delete the entire directory tree
+        shutil.rmtree(DATA_PATH)
+        shutil.rmtree(IMAGE_PATH)
+        print(f"Folder '{DATA_PATH}, {IMAGE_PATH}' and its subfolders deleted successfully.")
+    except FileNotFoundError:
+        pass
+    folder_init()
 
 #recolors image and make detections
 def recolor(image, model):
@@ -24,27 +55,21 @@ def recolor(image, model):
 
 
 def draw_landmarks(image, results):
-    #left hand
-    mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
-                                mp_drawing.DrawingSpec(color=(80,110,10), thickness=1, circle_radius=1))
+    mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS, mp_drawing.DrawingSpec(color=(80,110,10), thickness=1, circle_radius=1))
+    mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS, mp_drawing.DrawingSpec(color=(80,110,10), thickness=1, circle_radius=1))
+    mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS, mp_drawing.DrawingSpec(color=(245,117,66),thickness=2, circle_radius=2))  #change display
+
     
-    #right hand
-    mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
-                                mp_drawing.DrawingSpec(color=(80,110,10), thickness=1, circle_radius=1))
-    
-    #holistic detections
-    mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                                mp_drawing.DrawingSpec(color=(245,117,66),thickness=2, circle_radius=2))  #change display
-    
-def extract_keypoints(results):
+def extract_keypoints(results): #convert landmakrs to nparray
     pose = np.array([[res.x, res.y, res.z, res.visibility] for res in results.pose_landmarks.landmark]).flatten() if results.pose_landmarks else np.zeros(33*4)
     lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten() if results.left_hand_landmarks else np.zeros(21*3)
     rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten() if results.right_hand_landmarks else np.zeros(21*3)
     return np.concatenate([pose, lh, rh])
 
+folder_restart()
 
 
-#start webcame capture
+# start webcam capture
 cap = cv2.VideoCapture(0)
 frame_rate = cap.get(cv2.CAP_PROP_FPS)
 
@@ -56,7 +81,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
     # Loop through actions
     for action in actions:
         # Loop through sequences aka videos
-        for sequence in range(no_sequences):
+        for sequence in range(sequence_count):
             # Loop through video length aka sequence length
             for frame_num in range(sequence_length):
 
@@ -65,6 +90,9 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
 
                 # Make detections
                 image, results = recolor(frame, holistic)
+
+                # img_path = os.path.join(IMAGE_PATH, action, str(sequence), f"frame{frame_num}.jpg")
+                # cv2.imwrite(img_path, image)
 
                 # Draw landmarks
                 draw_landmarks(image, results)
@@ -89,9 +117,8 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                 npy_path = os.path.join(DATA_PATH, action, str(sequence), str(frame_num))
                 np.save(npy_path, keypoints)
 
-                # Break gracefully
-                if cv2.waitKey(10) & 0xFF == ord('q'):
-                    break
                     
     cap.release()
     cv2.destroyAllWindows()
+
+
